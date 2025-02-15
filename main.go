@@ -3,8 +3,6 @@ package main
 import (
 	"errors"
 	"github.com/poolpOrg/OpenSMTPD-framework/filter"
-	"github.com/rstms/mabctl/api"
-	"github.com/spf13/viper"
 	"log"
 	"os"
 	"strings"
@@ -12,6 +10,8 @@ import (
 )
 
 const Version = "0.0.6"
+
+const DEFAULT_CONFIG_FILE = "/etc/mail/filter-address-book.yml"
 
 /*********************************************************************************************
 
@@ -24,8 +24,9 @@ const Version = "0.0.6"
 *********************************************************************************************/
 
 type SessionData struct {
-	From string
-	To   []string
+	From   string
+	To     []string
+	Client *FilterControlClient
 }
 
 func getSessionData(session filter.Session) (*SessionData, error) {
@@ -44,6 +45,7 @@ func clearSessionData(session filter.Session) error {
 	}
 	sessionData.From = ""
 	sessionData.To = []string{}
+	sessionData.Client = NewFilterControlClient()
 	return nil
 }
 
@@ -75,22 +77,6 @@ func txRcptCb(timestamp time.Time, session filter.Session, messageId string, res
 	log.Printf("%s: %s: tx-rcpt: %s|%s|%s\n", timestamp, session, messageId, result, to)
 }
 
-func MAB() (*api.Controller, error) {
-	return api.NewAddressBookController()
-}
-
-func ScanAddressBooks(api *api.Controller, username, address string) ([]string, error) {
-	response, err := api.ScanAddress(username, address)
-	if err != nil {
-		return []string{}, err
-	}
-	books := make([]string, len(response.Books))
-	for i, book := range response.Books {
-		books[i] = book.BookName
-	}
-	return books, nil
-}
-
 func filterDataLineCb(timestamp time.Time, session filter.Session, line string) []string {
 	output := []string{line}
 	if strings.HasPrefix(line, "From: ") {
@@ -99,13 +85,8 @@ func filterDataLineCb(timestamp time.Time, session filter.Session, line string) 
 			log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
 			return output
 		}
-		api, err := MAB()
-		if err != nil {
-			log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
-			return output
-		}
 		for _, recipient := range sessionData.To {
-			books, err := ScanAddressBooks(api, recipient, line[7:])
+			books, err := sessionData.Client.ScanAddressBooks(recipient, line[7:])
 			if err != nil {
 				log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
 				return output
@@ -120,19 +101,14 @@ func filterDataLineCb(timestamp time.Time, session filter.Session, line string) 
 	return output
 }
 
-func Configure() error {
-	viper.SetConfigType("yaml")
-	viper.SetConfigFile("/etc/mabctl/config")
-	return viper.ReadInConfig()
-}
-
 func main() {
 	log.SetFlags(0)
-	cwd, err := os.Getwd()
+	log.Printf("Starting %s v%s uid=%d gid=%d\n", os.Args[0], Version, os.Getuid(), os.Getgid())
+
+	err := Configure(DEFAULT_CONFIG_FILE)
 	if err != nil {
-		log.Fatalf("failed getting current directory: %v", err)
+		log.Fatalf("configuration failed: %v\n", err)
 	}
-	log.Printf("Starting %s v%s mabctl=%s uid=%d gid=%d cwd=%s\n", os.Args[0], Version, api.Version, os.Getuid(), os.Getgid(), cwd)
 
 	filter.Init()
 
