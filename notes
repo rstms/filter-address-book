@@ -1,5 +1,0 @@
-add client.go with filterctld client
-add config.go with Configure(filename)
-set default config filename to /etc/mail/filter-address-book.yml
-change source file name to main.go
-update test
