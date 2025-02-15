@@ -12,6 +12,8 @@ import (
 	"github.com/poolpOrg/OpenSMTPD-framework/filter"
 )
 
+const Version = "0.0.2"
+
 /*********************************************************************************************
 
  filter-rspamd-class
