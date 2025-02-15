@@ -12,7 +12,7 @@ import (
 	"github.com/poolpOrg/OpenSMTPD-framework/filter"
 )
 
-const Version = "0.0.2"
+const Version = "0.0.3"
 
 /*********************************************************************************************
 
