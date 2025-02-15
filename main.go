@@ -86,7 +86,7 @@ func filterDataLineCb(timestamp time.Time, session filter.Session, line string) 
 			return output
 		}
 		for _, recipient := range sessionData.To {
-			books, err := sessionData.Client.ScanAddressBooks(recipient, line[7:])
+			books, err := sessionData.Client.ScanAddressBooks(recipient, line[6:])
 			if err != nil {
 				log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
 				return output

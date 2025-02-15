@@ -55,9 +55,9 @@ func (c *FilterControlClient) request(method, path string, data *[]byte) (*http.
 	if err != nil {
 		return nil, fmt.Errorf("failed creating %s request: %v", method, err)
 	}
-	//req.Header.Set("X-Api-Key", c.apikey)
-	//req.Header.Set("X-Admin-Username", c.username)
-	//req.Header.Set("X-Admin-Password", c.password)
+	// we connect directly to filterctld on localhost, bypassing the nginx reverse proxy
+	// so set the header indicating a validated client certificate
+	req.Header.Set("X-Client-Cert-Dn", "CN=filterctl")
 	if data != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
