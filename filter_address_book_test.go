@@ -2,15 +2,22 @@ package main
 
 import (
 	"fmt"
-	"github.com/rstms/rspamd-classes/classes"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
+const TestUser = "test@mailcapsule.io"
+const TestAddress = "test@bootnotice.com"
+
 func TestVersion(t *testing.T) {
-	SpamClasses, err := classes.New("")
+
+	err := Configure()
 	require.Nil(t, err)
-	require.NotEmpty(t, classes.Version)
-	require.NotNil(t, SpamClasses)
-	fmt.Printf("Version=v%s  rspamd_classes.Version=v%s\n", Version, classes.Version)
+	api, err := MAB()
+	require.Nil(t, err)
+	books, err := ScanAddressBooks(api, TestUser, TestAddress)
+	require.Nil(t, err)
+	for _, book := range books {
+		fmt.Printf("%s\n", book)
+	}
 }
