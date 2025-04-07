@@ -7,7 +7,7 @@ import (
 )
 
 const TestUser = "test@mailcapsule.io"
-const TestAddress = "test@bootnotice.com"
+const TestAddress = "test address <test@bootnotice.com>"
 
 func TestVersion(t *testing.T) {
 

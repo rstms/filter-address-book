@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/viper"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 )
 
 type Response struct {
@@ -32,9 +33,16 @@ func NewFilterControlClient() *FilterControlClient {
 	return &c
 }
 
+var ADDR_PATTERN = regexp.MustCompile("^.*<([^>]*)>.*$")
+
 func (c *FilterControlClient) ScanAddressBooks(username, address string) ([]string, error) {
 	var response BooksResponse
-	err := c.get(fmt.Sprintf("/scan/%s/%s/", username, address), &response)
+
+	matches := ADDR_PATTERN.FindStringSubmatch(address)
+	if matches == nil || len(matches) < 2 {
+		return []string{}, fmt.Errorf("no email address found in: '%v'\n", address)
+	}
+	err := c.get(fmt.Sprintf("/scan/%s/%s/", username, matches[1]), &response)
 	if err != nil {
 		return []string{}, err
 	}
