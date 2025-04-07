@@ -7,9 +7,22 @@ import (
 )
 
 const TestUser = "test@mailcapsule.io"
-const TestAddress = "test address <test@bootnotice.com>"
+const TestAddress = "test@bootnotice.com"
+const TestAddressWithBrackets = "test address <test@bootnotice.com>"
 
-func TestVersion(t *testing.T) {
+func TestBrackets(t *testing.T) {
+
+	err := Configure("testdata/config.yml")
+	require.Nil(t, err)
+	client := NewFilterControlClient()
+	books, err := client.ScanAddressBooks(TestUser, TestAddressWithBrackets)
+	require.Nil(t, err)
+	for _, book := range books {
+		fmt.Printf("%s\n", book)
+	}
+}
+
+func TestNoBrackets(t *testing.T) {
 
 	err := Configure("testdata/config.yml")
 	require.Nil(t, err)

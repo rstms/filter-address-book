@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
+	"strings"
 )
 
 type Response struct {
@@ -33,16 +34,23 @@ func NewFilterControlClient() *FilterControlClient {
 	return &c
 }
 
-var ADDR_PATTERN = regexp.MustCompile("^.*<([^>]*)>.*$")
+var ADDR_PATTERN = regexp.MustCompile(`^.*<([^>]*)>.*$`)
+var EMAIL_PATTERN = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
 func (c *FilterControlClient) ScanAddressBooks(username, address string) ([]string, error) {
 	var response BooksResponse
 
-	matches := ADDR_PATTERN.FindStringSubmatch(address)
-	if matches == nil || len(matches) < 2 {
-		return []string{}, fmt.Errorf("no email address found in: '%v'\n", address)
+	if strings.ContainsRune(address, '<') {
+		matches := ADDR_PATTERN.FindStringSubmatch(address)
+		if matches == nil || len(matches) < 2 {
+			return []string{}, fmt.Errorf("no email address found in: '%v'\n", address)
+		}
+		address = matches[1]
 	}
-	err := c.get(fmt.Sprintf("/scan/%s/%s/", username, matches[1]), &response)
+	if !EMAIL_PATTERN.MatchString(address) {
+		return []string{}, fmt.Errorf("invalid email address: '%v'\n", address)
+	}
+	err := c.get(fmt.Sprintf("/scan/%s/%s/", username, address), &response)
 	if err != nil {
 		return []string{}, err
 	}
