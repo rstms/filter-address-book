@@ -79,6 +79,12 @@ func txRcptCb(timestamp time.Time, session filter.Session, messageId string, res
 
 func filterDataLineCb(timestamp time.Time, session filter.Session, line string) []string {
 	output := []string{line}
+
+	if strings.HasPrefix(line, "X-Address-Book:") {
+		// remove existing X-Address-Book header
+		return output
+
+	}
 	if strings.HasPrefix(line, "From: ") {
 		sessionData, err := getSessionData(session)
 		if err != nil {
@@ -91,11 +97,10 @@ func filterDataLineCb(timestamp time.Time, session filter.Session, line string) 
 				log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
 				return output
 			}
-			for _, book := range books {
-				header := "X-Address-Book: " + book
-				output = append(output, header)
-				log.Printf("%s: %s: header='%s'\n", timestamp, session, header)
-			}
+			value := strings.Join(books, ",")
+			header := "X-Address-Book: " + value
+			output = append(output, header)
+			log.Printf("%s: %s: header='%s'\n", timestamp, session, header)
 		}
 	}
 	return output
