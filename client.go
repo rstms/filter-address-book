@@ -36,21 +36,26 @@ func NewFilterControlClient() *FilterControlClient {
 }
 
 var ADDR_PATTERN = regexp.MustCompile(`^.*<([^>]*)>.*$`)
-var EMAIL_PATTERN = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+var EMAIL_ADDRESS_PATTERN = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+
+func parseEmailAddress(line string) (string, error) {
+	addressLine := line
+	if strings.ContainsRune(addressLine, '<') {
+		matches := ADDR_PATTERN.FindStringSubmatch(addressLine)
+		if matches != nil && len(matches) > 1 {
+			addressLine = matches[1]
+		}
+	}
+	for _, address := range strings.Split(addressLine, " ") {
+		if EMAIL_ADDRESS_PATTERN.MatchString(address) {
+			return address, nil
+		}
+	}
+	return "", fmt.Errorf("address not found in '%s'\n", line)
+}
 
 func (c *FilterControlClient) ScanAddressBooks(username, address string) ([]string, error) {
 	var response BooksResponse
-
-	if strings.ContainsRune(address, '<') {
-		matches := ADDR_PATTERN.FindStringSubmatch(address)
-		if matches == nil || len(matches) < 2 {
-			return []string{}, fmt.Errorf("no email address found in: '%v'\n", address)
-		}
-		address = matches[1]
-	}
-	if !EMAIL_PATTERN.MatchString(address) {
-		return []string{}, fmt.Errorf("invalid email address: '%v'\n", address)
-	}
 	err := c.get(fmt.Sprintf("/scan/%s/%s/", username, address), &response)
 	if err != nil {
 		return []string{}, err

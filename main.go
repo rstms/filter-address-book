@@ -5,7 +5,6 @@ import (
 	"github.com/poolpOrg/OpenSMTPD-framework/filter"
 	"log"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -13,8 +12,6 @@ import (
 const Version = "0.1.6"
 
 const DEFAULT_CONFIG_FILE = "/etc/mail/filter-address-book.yml"
-
-var EMAIL_ADDRESS_PATTERN = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
 /*********************************************************************************************
 
@@ -94,29 +91,28 @@ func filterDataLineCb(timestamp time.Time, session filter.Session, line string) 
 			log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
 			return output
 		}
-		var senderAddress string
-		for _, part := range strings.Split(line, " ") {
-			if EMAIL_ADDRESS_PATTERN.MatchString(part) {
-				senderAddress = part
-				break
-			}
-		}
-		if senderAddress == "" {
+		fromAddress, err := parseEmailAddress(line)
+		if err != nil {
+			log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
 			return output
 		}
-
 		for _, recipient := range sessionData.To {
-			log.Printf("%s: %s: filter-data-line lookup recipient=%s sender=%s\n", timestamp, session, recipient, senderAddress)
-			books, err := sessionData.Client.ScanAddressBooks(recipient, senderAddress)
+			toAddress, err := parseEmailAddress(recipient)
 			if err != nil {
 				log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
-				return output
+				continue
+			}
+			log.Printf("%s: %s: filter-data-line lookup sender=%s recipient=%s\n", timestamp, session, fromAddress, toAddress)
+			books, err := sessionData.Client.ScanAddressBooks(toAddress, fromAddress)
+			if err != nil {
+				log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
+				continue
 			}
 			if len(books) > 0 {
 				value := strings.Join(books, ",")
 				header := "X-Address-Book: " + value
 				output = append(output, header)
-				log.Printf("%s: %s: header='%s'\n", timestamp, session, header)
+				log.Printf("%s: %s: add-header: '%s'\n", timestamp, session, header)
 			}
 		}
 	}
