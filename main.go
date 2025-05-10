@@ -85,7 +85,7 @@ func filterDataLineCb(timestamp time.Time, session filter.Session, line string) 
 		return output
 
 	}
-	if strings.HasPrefix(line, "From: ") {
+	if strings.HasPrefix(line, "From:") {
 		sessionData, err := getSessionData(session)
 		if err != nil {
 			log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
@@ -97,10 +97,12 @@ func filterDataLineCb(timestamp time.Time, session filter.Session, line string) 
 				log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
 				return output
 			}
-			value := strings.Join(books, ",")
-			header := "X-Address-Book: " + value
-			output = append(output, header)
-			log.Printf("%s: %s: header='%s'\n", timestamp, session, header)
+			if len(books) > 0 {
+				value := strings.Join(books, ",")
+				header := "X-Address-Book: " + value
+				output = append(output, header)
+				log.Printf("%s: %s: header='%s'\n", timestamp, session, header)
+			}
 		}
 	}
 	return output

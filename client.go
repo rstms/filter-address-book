@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -57,6 +58,7 @@ func (c *FilterControlClient) ScanAddressBooks(username, address string) ([]stri
 	if !response.Success {
 		return []string{}, fmt.Errorf("scan request failed: %v\n", response.Message)
 	}
+	slices.Sort(response.Books)
 	return response.Books, nil
 }
 
