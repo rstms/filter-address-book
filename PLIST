@@ -1,2 +1,2 @@
 @dir usr/local/libexec/smtpd
-@bin bin/filter-address-book
+@bin filter-address-book
