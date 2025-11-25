@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const Version = "0.1.14"
+const Version = "0.1.15"
 
 const DEFAULT_CONFIG_FILE = "/etc/mail/filter-address-book.yml"
 
