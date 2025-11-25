@@ -1,4 +1,5 @@
 @bin bin/filter-address-book
 @dir libexec/smtpd
-@exec ln -s %F libexec/smtpd/%f
-@unexec ln libexec/smtpd/%f
+@cwd libexec/smtpd
+@exec ln -s %F %D/%f
+@unexec rm %D/%f
