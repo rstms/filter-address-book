@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/poolpOrg/OpenSMTPD-framework/filter"
+	flag "github.com/spf13/pflag"
 	"log"
 	"os"
 	"strings"
@@ -120,6 +122,22 @@ func filterDataLineCb(timestamp time.Time, session filter.Session, line string) 
 }
 
 func main() {
+
+	versionFlag := flag.Bool("version", false, "output version")
+	helpFlag := flag.Bool("help", false, "show help")
+
+	flag.Parse()
+
+	if *helpFlag {
+		flag.Usage()
+		os.Exit(0)
+	}
+
+	if *versionFlag {
+		fmt.Printf("filter-address-book version %s\n", Version)
+		os.Exit(0)
+	}
+
 	log.SetFlags(0)
 	log.Printf("Starting %s v%s uid=%d gid=%d\n", os.Args[0], Version, os.Getuid(), os.Getgid())
 
