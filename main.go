@@ -28,103 +28,175 @@ const DEFAULT_CONFIG_FILE = "/etc/mail/filter-address-book.yml"
 *********************************************************************************************/
 
 type SessionData struct {
-	From   string
-	To     []string
-	Client *FilterControlClient
+	EnvelopeFrom   string
+	EnvelopeTo     []string
+	HeaderFrom     string
+	HeaderTo       string
+	Client         *FilterControlClient
+	HeaderComplete bool
 }
 
-func getSessionData(timestamp time.Time, label string, session filter.Session) (*SessionData, error) {
+func logError(session filter.Session, label string, err error) {
+	logMessage(session, label, "error: %v", err)
+}
+
+func logMessage(session filter.Session, label, format string, args ...interface{}) {
+	log.Printf("%s %s: %s\n", session, label, fmt.Sprintf(format, args...))
+}
+
+func loggedParseEmailAddress(session filter.Session, label, data string) (string, error) {
+	address, err := parseEmailAddress(data)
+	if err != nil {
+		return "", fmt.Errorf("parseEmailAddress(%s) failed: %v", data, err)
+	}
+	logMessage(session, label, "parseEmailAddress(%s) returned: '%s'", data, address)
+	return address, nil
+}
+
+func getSessionData(session filter.Session) (*SessionData, error) {
 	data := session.Get()
 	sessionData, ok := data.(*SessionData)
 	if !ok {
 		return nil, errors.New("SessionData conversion failure")
 	}
-	if Verbose {
-		log.Printf("%s: %s %s session=%+v\n", timestamp, label, session)
-	}
 	return sessionData, nil
 }
 
-func clearSessionData(timestamp time.Time, label string, session filter.Session) error {
-	sessionData, err := getSessionData(timestamp, label+"-clear-session-data", session)
+func clearSessionData(session filter.Session) error {
+	sessionData, err := getSessionData(session)
 	if err != nil {
 		return err
 	}
-	sessionData.From = ""
-	sessionData.To = []string{}
+	sessionData.EnvelopeFrom = ""
+	sessionData.EnvelopeTo = []string{}
+	sessionData.HeaderFrom = ""
+	sessionData.HeaderTo = ""
 	sessionData.Client = NewFilterControlClient()
+	sessionData.HeaderComplete = false
 	return nil
 }
 
 func txResetCb(timestamp time.Time, session filter.Session, messageId string) {
-	err := clearSessionData(timestamp, "tx-reset", session)
+	label := "tx-reset"
+	logMessage(session, label, "%s", messageId)
+	err := clearSessionData(session)
 	if err != nil {
-		log.Printf("%s: %s: tx-reset error: %v\n", timestamp, session, err)
+		logError(session, label, err)
 		return
 	}
-	log.Printf("%s: %s: tx-reset: %s\n", timestamp, session, messageId)
 }
 
 func txBeginCb(timestamp time.Time, session filter.Session, messageId string) {
-	err := clearSessionData(timestamp, "tx-begin", session)
+	label := "tx-begin"
+	logMessage(session, label, "%s", messageId)
+	err := clearSessionData(session)
 	if err != nil {
-		log.Printf("%s: %s: tx-begin error: %v\n", timestamp, session, err)
+		logError(session, label, err)
 		return
 	}
-	log.Printf("%s: %s: tx-begin: %s\n", timestamp, session, messageId)
 }
 
-func txRcptCb(timestamp time.Time, session filter.Session, messageId string, result string, to string) {
-	sessionData, err := getSessionData(timestamp, "tx-rcpt", session)
+func txMailCb(timestamp time.Time, session filter.Session, messageId string, result string, fromAddress string) {
+	label := "tx-mail-from"
+	logMessage(session, label, "%s|%s|%s", messageId, result, fromAddress)
+	sessionData, err := getSessionData(session)
 	if err != nil {
-		log.Printf("%s: %s: tx-rcpt error: %v\n", timestamp, session, err)
+		logError(session, label, err)
 		return
 	}
-	sessionData.To = append(sessionData.To, to)
-	log.Printf("%s: %s: tx-rcpt: %s|%s|%s\n", timestamp, session, messageId, result, to)
+	if sessionData.EnvelopeFrom != "" {
+		logError(session, label, fmt.Errorf("redundant MAIL-FROM: %s", fromAddress))
+	}
+	sessionData.EnvelopeFrom = fromAddress
+	logMessage(session, label, "EnvelopeFrom=%s", fromAddress)
+}
+
+func txRcptCb(timestamp time.Time, session filter.Session, messageId string, result string, toAddress string) {
+	label := "tx-rcpt-to"
+	logMessage(session, label, "%s|%s|%s", messageId, result, toAddress)
+	sessionData, err := getSessionData(session)
+	if err != nil {
+		logError(session, label, err)
+		return
+	}
+	sessionData.EnvelopeTo = append(sessionData.EnvelopeTo, toAddress)
+	logMessage(session, label, "EnvelopeTo=%v", sessionData.EnvelopeTo)
+}
+
+func txCommitCb(timestamp time.Time, session filter.Session, messageId string, messageSize int) {
+	label := "tx-commit"
+	logMessage(session, label, "%s|%d", messageId, messageSize)
 }
 
 func filterDataLineCb(timestamp time.Time, session filter.Session, line string) []string {
+
+	label := "filter-data-line"
+	if Verbose {
+		logMessage(session, label, "%s", line)
+	}
+
 	output := []string{line}
 
 	if strings.HasPrefix(line, "X-Address-Book:") {
 		// remove existing X-Address-Book header
-		return output
+		return []string{}
 
 	}
-	if Verbose {
-		log.Printf("%s: %s: filter-data-line line: %s\n", timestamp, session, line)
+	sessionData, err := getSessionData(session)
+	if err != nil {
+		logError(session, label, err)
+		return output
 	}
-	if strings.HasPrefix(line, "From:") {
-		sessionData, err := getSessionData(timestamp, "filter-data-line", session)
-		if err != nil {
-			log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
+	switch {
+	case strings.HasPrefix(line, "From:"):
+		if sessionData.HeaderFrom != "" {
+			logError(session, label, fmt.Errorf("redundant From header: %s", line))
 			return output
 		}
-		fromAddress, err := parseEmailAddress(line)
+		fromAddress, err := loggedParseEmailAddress(session, label, line)
 		if err != nil {
-			log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
+			logError(session, label, err)
 			return output
 		}
-		for _, recipient := range sessionData.To {
-			toAddress, err := parseEmailAddress(recipient)
-			if err != nil {
-				log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
-				continue
-			}
-			log.Printf("%s: %s: filter-data-line lookup sender=%s recipient=%s\n", timestamp, session, fromAddress, toAddress)
-			books, err := sessionData.Client.ScanAddressBooks(toAddress, fromAddress)
-			if err != nil {
-				log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
-				continue
-			}
-			if len(books) > 0 {
-				value := strings.Join(books, ",")
-				header := "X-Address-Book: " + value
-				output = append(output, header)
-				log.Printf("%s: %s: add-header: '%s'\n", timestamp, session, header)
-			}
+		sessionData.HeaderFrom = fromAddress
+		logMessage(session, label, "HeaderFrom=%s", fromAddress)
+	case strings.HasPrefix(line, "To:"):
+		if sessionData.HeaderTo != "" {
+			logError(session, label, fmt.Errorf("redundant To header: %s", line))
+			return output
 		}
+		toAddress, err := loggedParseEmailAddress(session, label, line)
+		if err != nil {
+			logError(session, label, err)
+			return output
+		}
+		sessionData.HeaderTo = toAddress
+		logMessage(session, label, "HeaderTo=%s", toAddress)
+
+	case strings.TrimSpace(line) == "" && sessionData.HeaderComplete == false:
+		sessionData.HeaderComplete = true
+		logMessage(session, label, "end-of-header sessionData=%+v", sessionData)
+		/*
+			for _, recipient := range sessionData.To {
+				toAddress, err := loggedParseEmailAddress(session, label, recipient)
+				if err != nil {
+					logError(session, label, err)
+					continue
+				}
+				log.Printf("%s: %s: filter-data-line lookup sender=%s recipient=%s\n", timestamp, session, fromAddress, toAddress)
+				books, err := sessionData.Client.ScanAddressBooks(toAddress, fromAddress)
+				if err != nil {
+					logError(session, label, err)
+					continue
+				}
+				if len(books) > 0 {
+					value := strings.Join(books, ",")
+					header := "X-Address-Book: " + value
+					output = append(output, header)
+					log.Printf("%s: %s: add-header: '%s'\n", timestamp, session, header)
+				}
+			}
+		*/
 	}
 	return output
 }
@@ -168,6 +240,8 @@ func main() {
 	filter.SMTP_IN.OnTxReset(txResetCb)
 	filter.SMTP_IN.OnTxBegin(txBeginCb)
 	filter.SMTP_IN.OnTxRcpt(txRcptCb)
+	filter.SMTP_IN.OnTxMail(txMailCb)
+	filter.SMTP_IN.OnTxCommit(txCommitCb)
 	filter.SMTP_IN.DataLineRequest(filterDataLineCb)
 
 	filter.Dispatch()
