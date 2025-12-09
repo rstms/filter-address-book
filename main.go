@@ -13,6 +13,8 @@ import (
 
 const Version = "0.1.15"
 
+var Verbose bool
+
 const DEFAULT_CONFIG_FILE = "/etc/mail/filter-address-book.yml"
 
 /*********************************************************************************************
@@ -31,17 +33,20 @@ type SessionData struct {
 	Client *FilterControlClient
 }
 
-func getSessionData(session filter.Session) (*SessionData, error) {
+func getSessionData(timestamp time.Time, label string, session filter.Session) (*SessionData, error) {
 	data := session.Get()
 	sessionData, ok := data.(*SessionData)
 	if !ok {
 		return nil, errors.New("SessionData conversion failure")
 	}
+	if Verbose {
+		log.Printf("%s: %s %s session=%+v\n", timestamp, label, session)
+	}
 	return sessionData, nil
 }
 
-func clearSessionData(session filter.Session) error {
-	sessionData, err := getSessionData(session)
+func clearSessionData(timestamp time.Time, label string, session filter.Session) error {
+	sessionData, err := getSessionData(timestamp, label+"-clear-session-data", session)
 	if err != nil {
 		return err
 	}
@@ -52,7 +57,7 @@ func clearSessionData(session filter.Session) error {
 }
 
 func txResetCb(timestamp time.Time, session filter.Session, messageId string) {
-	err := clearSessionData(session)
+	err := clearSessionData(timestamp, "tx-reset", session)
 	if err != nil {
 		log.Printf("%s: %s: tx-reset error: %v\n", timestamp, session, err)
 		return
@@ -61,7 +66,7 @@ func txResetCb(timestamp time.Time, session filter.Session, messageId string) {
 }
 
 func txBeginCb(timestamp time.Time, session filter.Session, messageId string) {
-	err := clearSessionData(session)
+	err := clearSessionData(timestamp, "tx-begin", session)
 	if err != nil {
 		log.Printf("%s: %s: tx-begin error: %v\n", timestamp, session, err)
 		return
@@ -70,7 +75,7 @@ func txBeginCb(timestamp time.Time, session filter.Session, messageId string) {
 }
 
 func txRcptCb(timestamp time.Time, session filter.Session, messageId string, result string, to string) {
-	sessionData, err := getSessionData(session)
+	sessionData, err := getSessionData(timestamp, "tx-rcpt", session)
 	if err != nil {
 		log.Printf("%s: %s: tx-rcpt error: %v\n", timestamp, session, err)
 		return
@@ -87,8 +92,11 @@ func filterDataLineCb(timestamp time.Time, session filter.Session, line string) 
 		return output
 
 	}
+	if Verbose {
+		log.Printf("%s: %s: filter-data-line line: %s\n", timestamp, session, line)
+	}
 	if strings.HasPrefix(line, "From:") {
-		sessionData, err := getSessionData(session)
+		sessionData, err := getSessionData(timestamp, "filter-data-line", session)
 		if err != nil {
 			log.Printf("%s: %s: filter-data-line error: %v\n", timestamp, session, err)
 			return output
@@ -124,6 +132,7 @@ func filterDataLineCb(timestamp time.Time, session filter.Session, line string) 
 func main() {
 
 	versionFlag := flag.Bool("version", false, "output version")
+	verboseFlag := flag.Bool("verbose", false, "enable diagnostic log output")
 	helpFlag := flag.Bool("help", false, "show help")
 
 	flag.Parse()
@@ -136,6 +145,10 @@ func main() {
 	if *versionFlag {
 		fmt.Printf("filter-address-book version %s\n", Version)
 		os.Exit(0)
+	}
+
+	if *verboseFlag {
+		Verbose = true
 	}
 
 	log.SetFlags(0)
