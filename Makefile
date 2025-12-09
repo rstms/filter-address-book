@@ -31,7 +31,6 @@ test: build
 
 release:
 	@$(gitclean) || { [ -n "$(dirty)" ] && echo "allowing dirty release"; }
-	@$(if $(update),gh release delete -y v$(version),)
 	gh release create v$(version) --notes "v$(version)"
 
 clean:
