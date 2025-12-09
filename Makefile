@@ -7,7 +7,7 @@ version != cat VERSION
 
 gitclean = if git status --porcelain | grep '^.*$$'; then echo git status is dirty; false; else echo git status is clean; true; fi
 
-install_dir = /usr/local/libexec/smtpd
+install_dir = /usr/local/bin
 postinstall = && doas rcctl restart smtpd
 
 
